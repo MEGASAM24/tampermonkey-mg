@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         MG BaseLinker – Weryfikator pobrania
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.1.0
+// @version      1.1.2
 // @description  Sprawdza poprawność kwot pobrania przy wielu przesyłkach w zamówieniu za pobraniem (BaseLinker API).
-// @match        https://panel-g.baselinker.com/orders.php*
-// @match        https://panel.baselinker.com/orders.php*
+// @match        *://panel-g.baselinker.com/*
+// @match        *://panel.baselinker.com/*
+// @include      *://panel-g.baselinker.com/orders.php*
+// @include      *://panel.baselinker.com/orders.php*
 // @updateURL    https://raw.githubusercontent.com/MEGASAM24/tampermonkey-mg/main/script.user.js
 // @downloadURL  https://raw.githubusercontent.com/MEGASAM24/tampermonkey-mg/main/script.user.js
 // @grant        GM_xmlhttpRequest
@@ -17,6 +19,10 @@
 
 (function () {
     'use strict';
+
+    if (!/\/orders\.php/.test(location.pathname)) {
+        return;
+    }
 
     const API_URL = 'https://api.baselinker.com/connector.php';
     const API_KEY_STORAGE = 'baselinker_api_token';
@@ -49,23 +55,69 @@
         return GM_getValue(API_KEY_STORAGE, '');
     }
 
+    function showApiKeyModal() {
+        if (document.getElementById('mg-cod-api-modal')) return;
+
+        const overlay = document.createElement('div');
+        overlay.id = 'mg-cod-api-modal';
+        overlay.style.cssText = [
+            'position:fixed', 'inset:0', 'z-index:100000',
+            'background:rgba(0,0,0,.55)', 'display:flex',
+            'align-items:center', 'justify-content:center',
+            'font-family:system-ui,sans-serif'
+        ].join(';');
+
+        overlay.innerHTML = `
+            <div style="background:#fff;border-radius:8px;padding:24px;max-width:480px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.3)">
+                <h3 style="margin:0 0 12px;font-size:18px">Weryfikator pobrania MG</h3>
+                <p style="margin:0 0 16px;color:#444;font-size:14px;line-height:1.5">
+                    Podaj klucz API BaseLinker<br>
+                    <small>(Konto i inne → Moje konto → API)</small>
+                </p>
+                <input id="mg-cod-api-input" type="password" placeholder="Wklej klucz API"
+                    style="width:100%;padding:10px;border:1px solid #ccc;border-radius:4px;font-size:14px;box-sizing:border-box" />
+                <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
+                    <button id="mg-cod-api-save" style="padding:8px 16px;background:#2ecc71;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600">
+                        Zapisz
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        const input = overlay.querySelector('#mg-cod-api-input');
+        const saveBtn = overlay.querySelector('#mg-cod-api-save');
+        const existing = getApiToken();
+        if (existing) input.value = existing;
+
+        saveBtn.addEventListener('click', () => {
+            const token = input.value.trim();
+            if (!token) {
+                input.style.borderColor = '#c0392b';
+                return;
+            }
+            GM_setValue(API_KEY_STORAGE, token);
+            overlay.remove();
+            scheduleValidation(false);
+        });
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') saveBtn.click();
+        });
+
+        input.focus();
+    }
+
     function promptForApiToken() {
-        const current = getApiToken();
-        const token = prompt(
-            'Weryfikator pobrania MG – podaj klucz API BaseLinker.\n' +
-            '(Konto → Moje konto → API)\n\n' +
-            'Klucz zostanie zapisany lokalnie w Tampermonkey.',
-            current || ''
-        );
-        if (token && token.trim()) {
-            GM_setValue(API_KEY_STORAGE, token.trim());
-            return token.trim();
-        }
-        return current;
+        showApiKeyModal();
+        return getApiToken();
     }
 
     GM_registerMenuCommand('MG: Ustaw klucz API BaseLinker', () => {
-        promptForApiToken();
+        const existing = document.getElementById('mg-cod-api-modal');
+        if (existing) existing.remove();
+        showApiKeyModal();
     });
 
     function blApi(method, parameters) {
@@ -451,6 +503,9 @@
             orderCodCache.clear();
             lastObservedPackageCount = -1;
             showBanner(null);
+            if (!getApiToken()) {
+                showApiKeyModal();
+            }
             scheduleValidation(false);
         });
 
