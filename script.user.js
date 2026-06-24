@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         COD verify
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.1.3
+// @version      1.1.4
 // @description  COD verify
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
@@ -78,12 +78,12 @@
 
         overlay.innerHTML = `
             <div style="background:#fff;border-radius:8px;padding:24px;max-width:480px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.3)">
-                <h3 style="margin:0 0 12px;font-size:18px">Weryfikator pobrania MG</h3>
+                <h3 style="margin:0 0 12px;font-size:18px">COD verify</h3>
                 <p style="margin:0 0 16px;color:#444;font-size:14px;line-height:1.5">
-                    Podaj klucz API BaseLinker<br>
-                    <small>(Konto i inne → Moje konto → API)</small>
+                    Podaj token<br>
+                
                 </p>
-                <input id="mg-cod-api-input" type="password" placeholder="Wklej klucz API"
+                <input id="mg-cod-api-input" type="password" placeholder="Token"
                     style="width:100%;padding:10px;border:1px solid #ccc;border-radius:4px;font-size:14px;box-sizing:border-box" />
                 <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
                     <button id="mg-cod-api-save" style="padding:8px 16px;background:#2ecc71;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600">
@@ -123,7 +123,7 @@
         return getApiToken();
     }
 
-    GM_registerMenuCommand('MG: Ustaw klucz API BaseLinker', () => {
+    GM_registerMenuCommand('Ustaw klucz API BaseLinker', () => {
         const existing = document.getElementById('mg-cod-api-modal');
         if (existing) existing.remove();
         showApiKeyModal();
@@ -343,7 +343,7 @@
             `BŁĄD POBRANIA: Suma kwot pobrania (${formatMoney(projectedSum)}) ` +
             `przekracza wartość zamówienia (${formatMoney(orderTotal)}).\n\n` +
             `Istniejące przesyłki: ${formatMoney(existingSum)}` +
-            (pendingCod > EPSILON ? `\nNowa przesyłka (formularz): ${formatMoney(pendingCod)}` : '') +
+            (pendingCod > EPSILON ? `\nNowa przesyłka: ${formatMoney(pendingCod)}` : '') +
             `\n\nRozdziel kwotę zamówienia między przesyłki lub ustaw pełną kwotę na jednej przesyłce, a 0 na pozostałych.`
         );
     }
@@ -401,7 +401,7 @@
 
                 if (packageCount >= 2 && pendingCod <= EPSILON && !isValidDistribution(existingCods, orderTotal)) {
                     const msg =
-                        `UWAGA POBRANIE: Suma kwot na ${packageCount} przesyłkach (${formatMoney(existingSum)}) ` +
+                        `UWAGA: Suma kwot na ${packageCount} przesyłkach (${formatMoney(existingSum)}) ` +
                         `nie odpowiada wartości zamówienia (${formatMoney(orderTotal)}).\n\n` +
                         `Sprawdź, czy kwota została poprawnie rozdzielona między przesyłki.`;
                     showBanner(msg.replace(/\n/g, ' '), 'warning');
