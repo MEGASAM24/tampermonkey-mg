@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         MG BaseLinker – Weryfikator pobrania
+// @name         COD verify
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
 // @version      1.1.2
-// @description  Sprawdza poprawność kwot pobrania przy wielu przesyłkach w zamówieniu za pobraniem (BaseLinker API).
+// @description  COD verify
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
 // @include      *://panel-g.baselinker.com/orders.php*
