@@ -1,12 +1,10 @@
 // ==UserScript==
 // @name         COD verify
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.1.2
+// @version      1.1.3
 // @description  COD verify
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
-// @include      *://panel-g.baselinker.com/orders.php*
-// @include      *://panel.baselinker.com/orders.php*
 // @updateURL    https://raw.githubusercontent.com/MEGASAM24/tampermonkey-mg/main/script.user.js
 // @downloadURL  https://raw.githubusercontent.com/MEGASAM24/tampermonkey-mg/main/script.user.js
 // @grant        GM_xmlhttpRequest
@@ -22,6 +20,17 @@
 
     if (!/\/orders\.php/.test(location.pathname)) {
         return;
+    }
+
+    console.log('[COD verify] skrypt uruchomiony na', location.href);
+
+    function showActiveBadge() {
+        if (document.getElementById('mg-cod-active-badge')) return;
+        const badge = document.createElement('div');
+        badge.id = 'mg-cod-active-badge';
+        badge.textContent = 'COD verify ✓';
+        badge.style.cssText = 'position:fixed;bottom:12px;right:12px;z-index:99998;padding:6px 10px;background:#2ecc71;color:#fff;font:12px system-ui;border-radius:4px;opacity:.85';
+        document.documentElement.appendChild(badge);
     }
 
     const API_URL = 'https://api.baselinker.com/connector.php';
@@ -517,6 +526,7 @@
     }
 
     function init() {
+        showActiveBadge();
         if (!getApiToken()) {
             promptForApiToken();
         }
