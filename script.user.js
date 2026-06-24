@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         COD verify
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.1.4
+// @version      1.1.5
 // @description  COD verify
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
@@ -326,18 +326,6 @@
         alert(message);
     }
 
-    function isValidDistribution(existingCods, orderTotal) {
-        const sum = existingCods.reduce((a, b) => a + b, 0);
-        if (Math.abs(sum - orderTotal) <= EPSILON) return true;
-
-        const nonZero = existingCods.filter((v) => v > EPSILON);
-        if (nonZero.length === 1 && Math.abs(nonZero[0] - orderTotal) <= EPSILON) {
-            return existingCods.every((v) => v <= EPSILON || Math.abs(v - orderTotal) <= EPSILON);
-        }
-
-        return false;
-    }
-
     function buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal) {
         return (
             `BŁĄD POBRANIA: Suma kwot pobrania (${formatMoney(projectedSum)}) ` +
@@ -372,7 +360,6 @@
             const orderTotal = getOrderTotal();
             if (orderTotal === null) return;
 
-            const packageCount = getPackageCount();
             const pendingCod = getPendingFormCod();
 
             let existingCods = [];
@@ -386,34 +373,12 @@
 
             const existingSum = existingCods.reduce((a, b) => a + b, 0);
             const projectedSum = existingSum + pendingCod;
-            const apiPackageCount = existingCods.length;
-            const multiPackage = packageCount >= 2 || apiPackageCount >= 2;
 
-            if (multiPackage) {
-                if (projectedSum > orderTotal + EPSILON) {
-                    const msg = buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal);
-                    showBanner(msg.replace(/\n/g, ' '), 'error');
-                    if (triggerAlert) {
-                        showAlertOnce(`over-${projectedSum}-${orderTotal}`, msg);
-                    }
-                    return;
-                }
-
-                if (packageCount >= 2 && pendingCod <= EPSILON && !isValidDistribution(existingCods, orderTotal)) {
-                    const msg =
-                        `UWAGA: Suma kwot na ${packageCount} przesyłkach (${formatMoney(existingSum)}) ` +
-                        `nie odpowiada wartości zamówienia (${formatMoney(orderTotal)}).\n\n` +
-                        `Sprawdź, czy kwota została poprawnie rozdzielona między przesyłki.`;
-                    showBanner(msg.replace(/\n/g, ' '), 'warning');
-                    return;
-                }
-            } else if (projectedSum > orderTotal + EPSILON) {
-                const msg =
-                    `BŁĄD POBRANIA: Kwota pobrania (${formatMoney(projectedSum)}) ` +
-                    `przekracza wartość zamówienia (${formatMoney(orderTotal)}).`;
-                showBanner(msg, 'error');
+            if (projectedSum > orderTotal + EPSILON) {
+                const msg = buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal);
+                showBanner(msg.replace(/\n/g, ' '), 'error');
                 if (triggerAlert) {
-                    showAlertOnce(`over-single-${projectedSum}`, msg);
+                    showAlertOnce(`over-${projectedSum}-${orderTotal}`, msg);
                 }
                 return;
             }
