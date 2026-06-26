@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tampermonkey MG
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.1.11
+// @version      1.1.12
 // @description  Tampermonkey MG
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
@@ -55,8 +55,19 @@
         return Number.isFinite(value) ? value : null;
     }
 
-    function formatMoney(value) {
-        return value.toFixed(2).replace('.', ',') + ' PLN';
+    function getOrderCurrency() {
+        const el = document.getElementById('sale_total_price');
+        if (el) {
+            const text = el.textContent.replace(/\u00a0/g, ' ').trim();
+            const match = text.match(/\b([A-Z]{3})\s*$/i);
+            if (match) return match[1].toUpperCase();
+        }
+        return 'PLN';
+    }
+
+    function formatMoney(value, currency) {
+        const cur = currency || getOrderCurrency();
+        return value.toFixed(2).replace('.', ',') + ' ' + cur;
     }
 
     function getApiToken() {
@@ -370,12 +381,13 @@
         banner.style.color = '#fff';
     }
 
-    function buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal) {
+    function buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal, currency) {
+        const cur = currency || getOrderCurrency();
         return (
-            `BŁĄD POBRANIA: Suma kwot pobrania (${formatMoney(projectedSum)}) ` +
-            `przekracza wartość zamówienia (${formatMoney(orderTotal)}).\n\n` +
-            `Istniejące przesyłki: ${formatMoney(existingSum)}` +
-            (pendingCod > EPSILON ? `\nNowa przesyłka: ${formatMoney(pendingCod)}` : '') +
+            `BŁĄD POBRANIA: Suma kwot pobrania (${formatMoney(projectedSum, cur)}) ` +
+            `przekracza wartość zamówienia (${formatMoney(orderTotal, cur)}).\n\n` +
+            `Istniejące przesyłki: ${formatMoney(existingSum, cur)}` +
+            (pendingCod > EPSILON ? `\nNowa przesyłka: ${formatMoney(pendingCod, cur)}` : '') +
             `\n\nRozdziel kwotę zamówienia między przesyłki lub ustaw pełną kwotę na jednej przesyłce, a 0 na pozostałych.`
         );
     }
@@ -404,6 +416,7 @@
             const orderTotal = getOrderTotal();
             if (orderTotal === null) return;
 
+            const currency = getOrderCurrency();
             const pendingCod = getPendingFormCod();
 
             let existingCods = [];
@@ -419,7 +432,7 @@
             const projectedSum = existingSum + pendingCod;
 
             if (projectedSum > orderTotal + EPSILON) {
-                const msg = buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal);
+                const msg = buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal, currency);
                 showOrderCodError(orderId, msg);
                 return;
             }
@@ -441,6 +454,8 @@
         const orderId = getCurrentOrderId();
         const orderTotal = getOrderTotal();
         if (!orderId || orderTotal === null) return;
+
+        const currency = getOrderCurrency();
 
         event.preventDefault();
         event.stopPropagation();
@@ -465,7 +480,7 @@
             pendingCod > EPSILON && projectedSum > orderTotal + EPSILON;
 
         if (blocksShipment) {
-            const msg = buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal);
+            const msg = buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal, currency);
             showBanner(msg.replace(/\n/g, ' '), 'error');
             return;
         }
