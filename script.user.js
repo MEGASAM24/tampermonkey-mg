@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         COD verify
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.1.7
+// @version      1.1.8
 // @description  COD verify 
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
@@ -40,11 +40,14 @@
     const CACHE_TTL_MS = 60_000;
 
     const orderCodCache = new Map();
-    let lastAlertKey = '';
-    let lastAlertAt = 0;
     let debounceTimer = null;
     let validationRunning = false;
     let lastObservedPackageCount = -1;
+    let suppressedErrorKey = '';
+
+    function makeErrorKey(orderId, projectedSum, orderTotal) {
+        return `${orderId}|${projectedSum.toFixed(2)}|${orderTotal.toFixed(2)}`;
+    }
 
     function parsePolishMoney(text) {
         if (!text) return null;
@@ -291,13 +294,9 @@
         document.getElementById('mg-cod-error-modal')?.remove();
     }
 
-    function showErrorModal(message) {
-        const now = Date.now();
-        if (message === lastAlertKey && now - lastAlertAt < 5000) return;
+    function showErrorModal(message, errorKey, force = false) {
+        if (!force && errorKey && errorKey === suppressedErrorKey) return;
         if (document.getElementById('mg-cod-error-modal')) return;
-
-        lastAlertKey = message;
-        lastAlertAt = now;
 
         const overlay = document.createElement('div');
         overlay.id = 'mg-cod-error-modal';
@@ -324,22 +323,19 @@
         overlay.querySelector('#mg-cod-error-modal-text').textContent = message;
 
         overlay.querySelector('#mg-cod-error-modal-ok').addEventListener('click', () => {
+            if (errorKey) suppressedErrorKey = errorKey;
             overlay.remove();
         });
     }
 
-    function showCodErrorBanner(message) {
+    function showCodError(message, errorKey, forceModal = false) {
         showBanner(message.replace(/\n/g, ' '), 'error');
-    }
-
-    function showCodErrorWithModal(message) {
-        showCodErrorBanner(message);
-        showErrorModal(message);
+        showErrorModal(message, errorKey, forceModal);
     }
 
     function clearCodError() {
         hideErrorModal();
-        lastAlertKey = '';
+        suppressedErrorKey = '';
         showBanner(null);
     }
 
@@ -376,7 +372,7 @@
     }
 
     function showAlertOnce(key, message) {
-        showErrorModal(message);
+        showErrorModal(message, key, true);
     }
 
     function buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal) {
@@ -429,7 +425,8 @@
 
             if (projectedSum > orderTotal + EPSILON) {
                 const msg = buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal);
-                showCodErrorBanner(msg);
+                const errorKey = makeErrorKey(orderId, projectedSum, orderTotal);
+                showCodError(msg, errorKey, false);
                 return;
             }
 
@@ -472,7 +469,8 @@
 
         if (projectedSum > orderTotal + EPSILON) {
             const msg = buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal);
-            showCodErrorWithModal(msg);
+            const errorKey = makeErrorKey(orderId, projectedSum, orderTotal);
+            showCodError(msg, errorKey, true);
             return;
         }
 
