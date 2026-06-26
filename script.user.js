@@ -2,7 +2,7 @@
 // @name         COD verify
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
 // @version      1.1.7
-// @description  COD verify
+// @description  COD verify 
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
 // @updateURL    https://raw.githubusercontent.com/MEGASAM24/tampermonkey-mg/main/script.user.js
