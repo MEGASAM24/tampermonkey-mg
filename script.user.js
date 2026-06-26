@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         COD verify
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.1.6
+// @version      1.1.7
 // @description  COD verify
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
@@ -328,13 +328,18 @@
         });
     }
 
-    function showCodError(message) {
+    function showCodErrorBanner(message) {
         showBanner(message.replace(/\n/g, ' '), 'error');
+    }
+
+    function showCodErrorWithModal(message) {
+        showCodErrorBanner(message);
         showErrorModal(message);
     }
 
     function clearCodError() {
         hideErrorModal();
+        lastAlertKey = '';
         showBanner(null);
     }
 
@@ -424,7 +429,7 @@
 
             if (projectedSum > orderTotal + EPSILON) {
                 const msg = buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal);
-                showCodError(msg);
+                showCodErrorBanner(msg);
                 return;
             }
 
@@ -467,7 +472,7 @@
 
         if (projectedSum > orderTotal + EPSILON) {
             const msg = buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal);
-            showCodError(msg);
+            showCodErrorWithModal(msg);
             return;
         }
 
