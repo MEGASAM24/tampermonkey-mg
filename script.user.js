@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tampermonkey MG
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.1.12
+// @version      1.1.13
 // @description  Tampermonkey MG
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
@@ -40,6 +40,7 @@
     const CACHE_TTL_MS = 60_000;
 
     const orderCodCache = new Map();
+    const orderInfoCache = new Map();
     let debounceTimer = null;
     let validationRunning = false;
     let lastObservedPackageCount = -1;
@@ -55,19 +56,58 @@
         return Number.isFinite(value) ? value : null;
     }
 
-    function getOrderCurrency() {
-        const el = document.getElementById('sale_total_price');
-        if (el) {
-            const text = el.textContent.replace(/\u00a0/g, ' ').trim();
-            const match = text.match(/\b([A-Z]{3})\s*$/i);
-            if (match) return match[1].toUpperCase();
-        }
-        return 'PLN';
+    function formatMoney(value, currency) {
+        return value.toFixed(2).replace('.', ',') + ' ' + currency;
     }
 
-    function formatMoney(value, currency) {
-        const cur = currency || getOrderCurrency();
-        return value.toFixed(2).replace('.', ',') + ' ' + cur;
+    function computeOrderTotalFromApi(order) {
+        const productsTotal = (order.products || []).reduce(
+            (sum, p) => sum + (Number(p.price_brutto) || 0) * (Number(p.quantity) || 0),
+            0
+        );
+        return productsTotal + (Number(order.delivery_price) || 0);
+    }
+
+    async function fetchOrderInfo(orderId) {
+        const key = String(orderId);
+        const cached = orderInfoCache.get(key);
+        if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+            return cached;
+        }
+
+        const response = await blApi('getOrders', {
+            order_id: parseInt(orderId, 10)
+        });
+
+        const order = response.orders && response.orders[0];
+        if (!order) {
+            throw new Error('Nie znaleziono zamówienia w API');
+        }
+
+        const info = {
+            currency: String(order.currency || 'PLN').toUpperCase(),
+            total: computeOrderTotalFromApi(order),
+            at: Date.now()
+        };
+
+        orderInfoCache.set(key, info);
+        return info;
+    }
+
+    async function getOrderInfo(orderId) {
+        try {
+            return await fetchOrderInfo(orderId);
+        } catch (error) {
+            console.error('[MG COD Validator] getOrders:', error);
+            const el = document.getElementById('sale_total_price');
+            const domTotal = el ? parsePolishMoney(el.textContent) : null;
+            if (domTotal === null) throw error;
+            return {
+                currency: 'PLN',
+                total: domTotal,
+                at: Date.now()
+            };
+        }
     }
 
     function getApiToken() {
@@ -194,11 +234,6 @@
 
         const paymentMethod = panel.querySelector('#oms_info_payment_method');
         return paymentMethod && /pobranie/i.test(paymentMethod.textContent);
-    }
-
-    function getOrderTotal() {
-        const el = document.getElementById('sale_total_price');
-        return el ? parsePolishMoney(el.textContent) : null;
     }
 
     function getPackageCount() {
@@ -382,12 +417,11 @@
     }
 
     function buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal, currency) {
-        const cur = currency || getOrderCurrency();
         return (
-            `BŁĄD POBRANIA: Suma kwot pobrania (${formatMoney(projectedSum, cur)}) ` +
-            `przekracza wartość zamówienia (${formatMoney(orderTotal, cur)}).\n\n` +
-            `Istniejące przesyłki: ${formatMoney(existingSum, cur)}` +
-            (pendingCod > EPSILON ? `\nNowa przesyłka: ${formatMoney(pendingCod, cur)}` : '') +
+            `BŁĄD POBRANIA: Suma kwot pobrania (${formatMoney(projectedSum, currency)}) ` +
+            `przekracza wartość zamówienia (${formatMoney(orderTotal, currency)}).\n\n` +
+            `Istniejące przesyłki: ${formatMoney(existingSum, currency)}` +
+            (pendingCod > EPSILON ? `\nNowa przesyłka: ${formatMoney(pendingCod, currency)}` : '') +
             `\n\nRozdziel kwotę zamówienia między przesyłki lub ustaw pełną kwotę na jednej przesyłce, a 0 na pozostałych.`
         );
     }
@@ -413,20 +447,21 @@
                 return;
             }
 
-            const orderTotal = getOrderTotal();
-            if (orderTotal === null) return;
-
-            const currency = getOrderCurrency();
             const pendingCod = getPendingFormCod();
 
+            let orderInfo;
             let existingCods = [];
             try {
+                orderInfo = await getOrderInfo(orderId);
                 existingCods = await fetchOrderCodAmounts(orderId);
             } catch (error) {
                 console.error('[MG COD Validator]', error);
                 showBanner(`Weryfikator pobrania: ${error.message}`, 'warning');
                 return;
             }
+
+            const orderTotal = orderInfo.total;
+            const currency = orderInfo.currency;
 
             const existingSum = existingCods.reduce((a, b) => a + b, 0);
             const projectedSum = existingSum + pendingCod;
@@ -452,10 +487,7 @@
         if (!isCodOrder()) return;
 
         const orderId = getCurrentOrderId();
-        const orderTotal = getOrderTotal();
-        if (!orderId || orderTotal === null) return;
-
-        const currency = getOrderCurrency();
+        if (!orderId) return;
 
         event.preventDefault();
         event.stopPropagation();
@@ -464,14 +496,19 @@
         const button = event.currentTarget;
         const pendingCod = getPendingFormCod();
 
+        let orderInfo;
         let existingCods = [];
         try {
+            orderInfo = await getOrderInfo(orderId);
             existingCods = await fetchOrderCodAmounts(orderId);
         } catch (error) {
             console.error('[MG COD Validator]', error);
             showBanner(`Weryfikator pobrania: ${error.message}`, 'warning');
             return;
         }
+
+        const orderTotal = orderInfo.total;
+        const currency = orderInfo.currency;
 
         const existingSum = existingCods.reduce((a, b) => a + b, 0);
         const projectedSum = existingSum + pendingCod;
@@ -533,6 +570,7 @@
 
         window.addEventListener('hashchange', () => {
             orderCodCache.clear();
+            orderInfoCache.clear();
             lastObservedPackageCount = -1;
             resetOrderErrorState();
             if (!getApiToken()) {
