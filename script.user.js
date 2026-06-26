@@ -13,7 +13,7 @@
 // @grant        GM_registerMenuCommand
 // @connect      api.baselinker.com
 // @run-at       document-idle
-// ==/UserScript==
+// ==/UserScript==   
 
 (function () {
     'use strict';
