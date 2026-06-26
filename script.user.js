@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tampermonkey MG
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.1.10
+// @version      1.1.11
 // @description  Tampermonkey MG
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
@@ -43,11 +43,7 @@
     let debounceTimer = null;
     let validationRunning = false;
     let lastObservedPackageCount = -1;
-    let suppressedErrorKey = '';
-
-    function makeErrorKey(orderId, projectedSum, orderTotal) {
-        return `${orderId}|${projectedSum.toFixed(2)}|${orderTotal.toFixed(2)}`;
-    }
+    let modalDismissedForOrderId = null;
 
     function parsePolishMoney(text) {
         if (!text) return null;
@@ -294,8 +290,8 @@
         document.getElementById('mg-cod-error-modal')?.remove();
     }
 
-    function showErrorModal(message, errorKey, force = false) {
-        if (!force && errorKey && errorKey === suppressedErrorKey) return;
+    function showErrorModal(message, orderId) {
+        if (String(orderId) === String(modalDismissedForOrderId)) return;
         if (document.getElementById('mg-cod-error-modal')) return;
 
         const overlay = document.createElement('div');
@@ -323,22 +319,24 @@
         overlay.querySelector('#mg-cod-error-modal-text').textContent = message;
 
         overlay.querySelector('#mg-cod-error-modal-ok').addEventListener('click', () => {
-            if (errorKey) suppressedErrorKey = errorKey;
+            modalDismissedForOrderId = String(orderId);
             overlay.remove();
         });
     }
 
-    function showCodError(message, errorKey, showModal = false) {
+    function showOrderCodError(orderId, message) {
         showBanner(message.replace(/\n/g, ' '), 'error');
-        if (showModal) {
-            showErrorModal(message, errorKey, true);
-        }
+        showErrorModal(message, orderId);
     }
 
     function clearCodError() {
         hideErrorModal();
-        suppressedErrorKey = '';
         showBanner(null);
+    }
+
+    function resetOrderErrorState() {
+        modalDismissedForOrderId = null;
+        clearCodError();
     }
 
     function showBanner(message, type) {
@@ -364,17 +362,12 @@
 
         if (!message) {
             banner.remove();
-            hideErrorModal();
             return;
         }
 
         banner.textContent = message;
         banner.style.background = type === 'error' ? '#c0392b' : '#e67e22';
         banner.style.color = '#fff';
-    }
-
-    function showAlertOnce(key, message) {
-        showErrorModal(message, key, true);
     }
 
     function buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal) {
@@ -427,8 +420,7 @@
 
             if (projectedSum > orderTotal + EPSILON) {
                 const msg = buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal);
-                const errorKey = makeErrorKey(orderId, projectedSum, orderTotal);
-                showCodError(msg, errorKey, false);
+                showOrderCodError(orderId, msg);
                 return;
             }
 
@@ -462,7 +454,7 @@
             existingCods = await fetchOrderCodAmounts(orderId);
         } catch (error) {
             console.error('[MG COD Validator]', error);
-            showAlertOnce('api-error', `Nie udało się zweryfikować pobrania: ${error.message}`);
+            showBanner(`Weryfikator pobrania: ${error.message}`, 'warning');
             return;
         }
 
@@ -474,8 +466,7 @@
 
         if (blocksShipment) {
             const msg = buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal);
-            const errorKey = makeErrorKey(orderId, projectedSum, orderTotal);
-            showCodError(msg, errorKey, true);
+            showBanner(msg.replace(/\n/g, ' '), 'error');
             return;
         }
 
@@ -528,7 +519,7 @@
         window.addEventListener('hashchange', () => {
             orderCodCache.clear();
             lastObservedPackageCount = -1;
-            clearCodError();
+            resetOrderErrorState();
             if (!getApiToken()) {
                 showApiKeyModal();
             }
