@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         COD verify
+// @name         Tampermonkey MG
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.1.8
-// @description  COD verify  
+// @version      1.1.9
+// @description  Tampermonkey MG
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
 // @updateURL    https://raw.githubusercontent.com/MEGASAM24/tampermonkey-mg/main/script.user.js
@@ -467,7 +467,10 @@
         const existingSum = existingCods.reduce((a, b) => a + b, 0);
         const projectedSum = existingSum + pendingCod;
 
-        if (projectedSum > orderTotal + EPSILON) {
+        const blocksShipment =
+            pendingCod > EPSILON && projectedSum > orderTotal + EPSILON;
+
+        if (blocksShipment) {
             const msg = buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal);
             const errorKey = makeErrorKey(orderId, projectedSum, orderTotal);
             showCodError(msg, errorKey, true);
