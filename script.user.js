@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tampermonkey MG
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.1.9
+// @version      1.1.10
 // @description  Tampermonkey MG
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
@@ -328,9 +328,11 @@
         });
     }
 
-    function showCodError(message, errorKey, forceModal = false) {
+    function showCodError(message, errorKey, showModal = false) {
         showBanner(message.replace(/\n/g, ' '), 'error');
-        showErrorModal(message, errorKey, forceModal);
+        if (showModal) {
+            showErrorModal(message, errorKey, true);
+        }
     }
 
     function clearCodError() {
