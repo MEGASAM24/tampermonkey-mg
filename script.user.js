@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         COD verify
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.1.5 
+// @version      1.1.6
 // @description  COD verify
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
@@ -28,7 +28,7 @@
         if (document.getElementById('mg-cod-active-badge')) return;
         const badge = document.createElement('div');
         badge.id = 'mg-cod-active-badge';
-        badge.textContent = 'COD verify ✓';
+        badge.textContent = 'Tampermonkey MG';
         badge.style.cssText = 'position:fixed;bottom:12px;right:12px;z-index:99998;padding:6px 10px;background:#2ecc71;color:#fff;font:12px system-ui;border-radius:4px;opacity:.85';
         document.documentElement.appendChild(badge);
     }
@@ -287,6 +287,57 @@
         });
     }
 
+    function hideErrorModal() {
+        document.getElementById('mg-cod-error-modal')?.remove();
+    }
+
+    function showErrorModal(message) {
+        const now = Date.now();
+        if (message === lastAlertKey && now - lastAlertAt < 5000) return;
+        if (document.getElementById('mg-cod-error-modal')) return;
+
+        lastAlertKey = message;
+        lastAlertAt = now;
+
+        const overlay = document.createElement('div');
+        overlay.id = 'mg-cod-error-modal';
+        overlay.style.cssText = [
+            'position:fixed', 'inset:0', 'z-index:100001',
+            'background:rgba(0,0,0,.55)', 'display:flex',
+            'align-items:center', 'justify-content:center',
+            'font-family:system-ui,sans-serif'
+        ].join(';');
+
+        overlay.innerHTML = `
+            <div style="background:#fff;border-radius:8px;padding:24px;max-width:520px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.3)">
+                <h3 style="margin:0 0 16px;font-size:18px;color:#c0392b">Błąd pobrania</h3>
+                <div id="mg-cod-error-modal-text" style="margin:0 0 20px;color:#333;font-size:14px;line-height:1.6;white-space:pre-line"></div>
+                <div style="display:flex;justify-content:flex-end">
+                    <button id="mg-cod-error-modal-ok" style="padding:8px 20px;background:#c0392b;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:14px">
+                        OK
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+        overlay.querySelector('#mg-cod-error-modal-text').textContent = message;
+
+        overlay.querySelector('#mg-cod-error-modal-ok').addEventListener('click', () => {
+            overlay.remove();
+        });
+    }
+
+    function showCodError(message) {
+        showBanner(message.replace(/\n/g, ' '), 'error');
+        showErrorModal(message);
+    }
+
+    function clearCodError() {
+        hideErrorModal();
+        showBanner(null);
+    }
+
     function showBanner(message, type) {
         let banner = document.getElementById('mg-cod-validator-banner');
         if (!banner) {
@@ -310,6 +361,7 @@
 
         if (!message) {
             banner.remove();
+            hideErrorModal();
             return;
         }
 
@@ -319,11 +371,7 @@
     }
 
     function showAlertOnce(key, message) {
-        const now = Date.now();
-        if (key === lastAlertKey && now - lastAlertAt < 5000) return;
-        lastAlertKey = key;
-        lastAlertAt = now;
-        alert(message);
+        showErrorModal(message);
     }
 
     function buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal) {
@@ -343,7 +391,7 @@
         try {
             const orderId = getCurrentOrderId();
             if (!orderId) {
-                showBanner(null);
+                clearCodError();
                 return;
             }
 
@@ -353,7 +401,7 @@
             }
 
             if (!isCodOrder()) {
-                showBanner(null);
+                clearCodError();
                 return;
             }
 
@@ -376,14 +424,11 @@
 
             if (projectedSum > orderTotal + EPSILON) {
                 const msg = buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal);
-                showBanner(msg.replace(/\n/g, ' '), 'error');
-                if (triggerAlert) {
-                    showAlertOnce(`over-${projectedSum}-${orderTotal}`, msg);
-                }
+                showCodError(msg);
                 return;
             }
 
-            showBanner(null);
+            clearCodError();
         } finally {
             validationRunning = false;
         }
@@ -422,8 +467,7 @@
 
         if (projectedSum > orderTotal + EPSILON) {
             const msg = buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal);
-            showBanner(msg.replace(/\n/g, ' '), 'error');
-            showAlertOnce(`block-${projectedSum}-${orderTotal}`, msg);
+            showCodError(msg);
             return;
         }
 
@@ -476,7 +520,7 @@
         window.addEventListener('hashchange', () => {
             orderCodCache.clear();
             lastObservedPackageCount = -1;
-            showBanner(null);
+            clearCodError();
             if (!getApiToken()) {
                 showApiKeyModal();
             }
