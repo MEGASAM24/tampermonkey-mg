@@ -29,7 +29,7 @@
         const badge = document.createElement('div');
         badge.id = 'mg-cod-active-badge';
         badge.textContent = 'Tampermonkey MG';
-        badge.style.cssText = 'position:fixed;bottom:12px;right:12px;z-index:99998;padding:6px 10px;background:#2ecc71;color:#fff;font:12px system-ui;border-radius:4px;opacity:.85';
+        badge.style.cssText = 'position:fixed;bottom:42px;right:12px;z-index:99998;padding:3px 7px;background:#2ecc71;color:#fff;font:10px system-ui;border-radius:3px;opacity:.85';
         document.documentElement.appendChild(badge);
     }
 
