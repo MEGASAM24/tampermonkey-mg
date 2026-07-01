@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tampermonkey MG
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.1.14
+// @version      1.1.15
 // @description  Tampermonkey MG
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
@@ -391,6 +391,11 @@
         showErrorModal(message, orderId);
     }
 
+    function showOrderCodWarning(message) {
+        hideErrorModal();
+        showBanner(message.replace(/\n/g, ' '), 'warning');
+    }
+
     function clearCodError() {
         hideErrorModal();
         showBanner(null);
@@ -399,6 +404,50 @@
     function resetOrderErrorState() {
         modalDismissedForOrderId = null;
         clearCodError();
+    }
+
+    function classifyCodIssue(existingSum, pendingCod, projectedSum, orderTotal) {
+        if (projectedSum <= orderTotal + EPSILON) return 'ok';
+        if (existingSum > orderTotal + EPSILON) return 'error';
+        if (pendingCod > EPSILON && isCourierFormOpen()) return 'warning';
+        return 'error';
+    }
+
+    function buildOverLimitErrorMessage(existingSum, pendingCod, projectedSum, orderTotal, currency) {
+        const lines = [
+            `BŁĄD POBRANIA: Suma kwot pobrania (${formatMoney(projectedSum, currency)}) ` +
+            `przekracza wartość zamówienia (${formatMoney(orderTotal, currency)}).`,
+            '',
+            `Istniejące przesyłki: ${formatMoney(existingSum, currency)}`
+        ];
+        if (pendingCod > EPSILON) {
+            lines.push(`Nowa przesyłka: ${formatMoney(pendingCod, currency)}`);
+        }
+        lines.push(
+            '',
+            'Rozdziel kwotę zamówienia między przesyłki lub ustaw pełną kwotę na jednej przesyłce, a 0 na pozostałych.'
+        );
+        return lines.join('\n');
+    }
+
+    function buildOverLimitWarningMessage(existingSum, pendingCod, projectedSum, orderTotal, currency) {
+        return (
+            `OSTRZEŻENIE: Jeśli wystawisz przesyłkę bez zmiany kwoty pobrania, suma przekroczy wartość zamówienia.\n\n` +
+            `Istniejące przesyłki: ${formatMoney(existingSum, currency)}\n` +
+            `Kwota w formularzu: ${formatMoney(pendingCod, currency)}\n` +
+            `Suma po wystawieniu: ${formatMoney(projectedSum, currency)} (limit: ${formatMoney(orderTotal, currency)})\n\n` +
+            `Popraw kwotę pobrania w formularzu przed wystawieniem przesyłki.`
+        );
+    }
+
+    function buildSubmitBlockedMessage(existingSum, pendingCod, projectedSum, orderTotal, currency) {
+        return (
+            `BŁĄD POBRANIA: Nie można wystawić przesyłki — suma kwot pobrania (${formatMoney(projectedSum, currency)}) ` +
+            `przekracza wartość zamówienia (${formatMoney(orderTotal, currency)}).\n\n` +
+            `Istniejące przesyłki: ${formatMoney(existingSum, currency)}\n` +
+            `Nowa przesyłka: ${formatMoney(pendingCod, currency)}\n\n` +
+            `Popraw kwotę pobrania przed wystawieniem.`
+        );
     }
 
     function showBanner(message, type) {
@@ -430,16 +479,6 @@
         banner.textContent = message;
         banner.style.background = type === 'error' ? '#c0392b' : '#e67e22';
         banner.style.color = '#fff';
-    }
-
-    function buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal, currency) {
-        return (
-            `BŁĄD POBRANIA: Suma kwot pobrania (${formatMoney(projectedSum, currency)}) ` +
-            `przekracza wartość zamówienia (${formatMoney(orderTotal, currency)}).\n\n` +
-            `Istniejące przesyłki: ${formatMoney(existingSum, currency)}` +
-            (pendingCod > EPSILON ? `\nNowa przesyłka: ${formatMoney(pendingCod, currency)}` : '') +
-            `\n\nRozdziel kwotę zamówienia między przesyłki lub ustaw pełną kwotę na jednej przesyłce, a 0 na pozostałych.`
-        );
     }
 
     async function runValidation(triggerAlert) {
@@ -482,9 +521,17 @@
             const existingSum = existingCods.reduce((a, b) => a + b, 0);
             const projectedSum = existingSum + pendingCod;
 
-            if (projectedSum > orderTotal + EPSILON) {
-                const msg = buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal, currency);
+            const issue = classifyCodIssue(existingSum, pendingCod, projectedSum, orderTotal);
+
+            if (issue === 'error') {
+                const msg = buildOverLimitErrorMessage(existingSum, pendingCod, projectedSum, orderTotal, currency);
                 showOrderCodError(orderId, msg);
+                return;
+            }
+
+            if (issue === 'warning') {
+                const msg = buildOverLimitWarningMessage(existingSum, pendingCod, projectedSum, orderTotal, currency);
+                showOrderCodWarning(msg);
                 return;
             }
 
@@ -533,7 +580,7 @@
             pendingCod > EPSILON && projectedSum > orderTotal + EPSILON;
 
         if (blocksShipment) {
-            const msg = buildOverLimitMessage(existingSum, pendingCod, projectedSum, orderTotal, currency);
+            const msg = buildSubmitBlockedMessage(existingSum, pendingCod, projectedSum, orderTotal, currency);
             showBanner(msg.replace(/\n/g, ' '), 'error');
             return;
         }
