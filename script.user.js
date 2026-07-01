@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tampermonkey MG
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.1.13
+// @version      1.1.14
 // @description  Tampermonkey MG
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
@@ -288,6 +288,19 @@
         return cods;
     }
 
+    function isElementVisible(el) {
+        if (!el || !el.isConnected) return false;
+        const style = window.getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden') return false;
+        return el.getClientRects().length > 0;
+    }
+
+    function isCourierFormOpen() {
+        const form = document.getElementById('courier_package_form');
+        if (!form || !form.textContent.trim()) return false;
+        return isElementVisible(form);
+    }
+
     function findCodInputInForm() {
         const form = document.getElementById('courier_package_form');
         if (!form) return null;
@@ -316,8 +329,11 @@
     }
 
     function getPendingFormCod() {
+        if (!isCourierFormOpen()) return 0;
+
         const input = findCodInputInForm();
-        if (!input) return 0;
+        if (!input || !isElementVisible(input)) return 0;
+
         const value = parsePolishMoney(input.value);
         return value === null ? 0 : value;
     }
