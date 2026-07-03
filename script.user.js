@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tampermonkey MG
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.2.0
+// @version      1.2.1
 // @description  Tampermonkey MG
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
@@ -612,6 +612,7 @@
     const TEMU_NK_COUNTRY_NAMES = /rumunia|romania|bułgaria|bulgaria|węgry|hungary/i;
 
     let courierFilterTimer = null;
+    let courierFilterActive = false;
 
     function ensureCourierFilterStyles() {
         if (document.getElementById('mg-courier-filter-style')) return;
@@ -658,7 +659,7 @@
                 : [COURIER.inpostKurier];
         }
 
-        if (source.includes('{Temu}')) {
+        if (/\(Temu\)|\{Temu\}/i.test(source)) {
             return [isTemuNkCountry() ? COURIER.noweKolory : COURIER.temu];
         }
 
@@ -680,13 +681,14 @@
     }
 
     function restoreCourierButtonState(btn) {
+        if (btn.dataset.mgCourierOriginalHide === undefined) return;
+
         btn.classList.remove('mg-courier-filter-hide');
         btn.style.removeProperty('display');
         if (btn.dataset.mgCourierOriginalHide === '1') {
             btn.classList.add('hide');
-        } else {
-            btn.classList.remove('hide');
         }
+        delete btn.dataset.mgCourierOriginalHide;
     }
 
     function setCourierButtonVisible(btn, visible) {
@@ -704,20 +706,24 @@
         const container = document.getElementById('order_packages_courier_buttons');
         if (!container) return;
 
-        ensureCourierFilterStyles();
-
         const allowed = resolveAllowedCourierNames(getOrderSourceText());
         const buttons = container.querySelectorAll('[id^="courier_"][data-courier-name]');
         const toggleBtn = container.querySelector('button');
 
         if (allowed === null) {
+            if (!courierFilterActive) return;
+
             buttons.forEach((btn) => restoreCourierButtonState(btn));
             if (toggleBtn) {
                 toggleBtn.classList.remove('mg-courier-filter-hide');
                 toggleBtn.style.removeProperty('display');
             }
+            courierFilterActive = false;
             return;
         }
+
+        ensureCourierFilterStyles();
+        courierFilterActive = true;
 
         const allowedSet = new Set(allowed);
 
@@ -786,6 +792,7 @@
             orderInfoCache.clear();
             lastObservedPackageCount = -1;
             resetOrderErrorState();
+            courierFilterActive = false;
             scheduleCourierFilter();
             if (!getApiToken()) {
                 showApiKeyModal();
