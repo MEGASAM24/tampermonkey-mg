@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tampermonkey MG
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.1.15
+// @version      1.2.0
 // @description  Tampermonkey MG
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
@@ -596,6 +596,153 @@
         button.addEventListener('click', onSubmitAttempt, true);
     }
 
+    // --- Filtrowanie kurierów wg źródła zamówienia ---
+
+    const COURIER = {
+        allegro: 'allegrokurier',
+        temu: 'temu_shipping',
+        noweKolory: 'nowekolory',
+        furgonetka: 'furgonetka',
+        blpaczka: 'blpaczka',
+        paczkomaty: 'paczkomaty',
+        inpostKurier: 'inpostkurier'
+    };
+
+    const TEMU_NK_COUNTRY_CODES = new Set(['RO', 'BG', 'HU']);
+    const TEMU_NK_COUNTRY_NAMES = /rumunia|romania|bułgaria|bulgaria|węgry|hungary/i;
+
+    let courierFilterTimer = null;
+
+    function ensureCourierFilterStyles() {
+        if (document.getElementById('mg-courier-filter-style')) return;
+        const style = document.createElement('style');
+        style.id = 'mg-courier-filter-style';
+        style.textContent = '#order_packages_courier_buttons .mg-courier-filter-hide{display:none!important}';
+        document.documentElement.appendChild(style);
+    }
+
+    function getOrderSourceText() {
+        return document.getElementById('oms_info_order_from')?.textContent?.trim() || '';
+    }
+
+    function getDeliveryCountryCode() {
+        const code = document.getElementById('oms_delivery_delivery_country_code')?.value?.trim();
+        if (code) return code.toUpperCase();
+
+        const name = document.getElementById('oms_delivery_delivery_country')?.textContent?.trim() || '';
+        if (/rumunia|romania/i.test(name)) return 'RO';
+        if (/bułgaria|bulgaria/i.test(name)) return 'BG';
+        if (/węgry|hungary/i.test(name)) return 'HU';
+        return '';
+    }
+
+    function isTemuNkCountry() {
+        const code = getDeliveryCountryCode();
+        if (TEMU_NK_COUNTRY_CODES.has(code)) return true;
+        const name = document.getElementById('oms_delivery_delivery_country')?.textContent?.trim() || '';
+        return TEMU_NK_COUNTRY_NAMES.test(name);
+    }
+
+    function getDeliveryMethodText() {
+        return document.getElementById('oms_info_delivery_method')?.textContent?.trim() || '';
+    }
+
+    function resolveAllowedCourierNames(source) {
+        if (!source) return null;
+
+        if (source.includes('(Base)')) return [];
+
+        if (source.includes('(InPost Von Halsky)')) {
+            return getDeliveryMethodText().includes('Paczkomat')
+                ? [COURIER.paczkomaty]
+                : [COURIER.inpostKurier];
+        }
+
+        if (source.includes('{Temu}')) {
+            return [isTemuNkCountry() ? COURIER.noweKolory : COURIER.temu];
+        }
+
+        if (/\(eMAG\.ro\)|\(eMAG\.bg\)|\(eMAG\.hu\)/i.test(source)) {
+            return [COURIER.noweKolory];
+        }
+
+        if (source.includes('(Allegro)')) return [COURIER.allegro];
+        if (source.includes('(Sklep int.)')) return [COURIER.furgonetka];
+        if (source.includes('(Kaufland)')) return [COURIER.furgonetka];
+        if (/Amazon/i.test(source)) return [COURIER.blpaczka];
+
+        return null;
+    }
+
+    function rememberCourierButtonState(btn) {
+        if (btn.dataset.mgCourierOriginalHide !== undefined) return;
+        btn.dataset.mgCourierOriginalHide = btn.classList.contains('hide') ? '1' : '0';
+    }
+
+    function restoreCourierButtonState(btn) {
+        btn.classList.remove('mg-courier-filter-hide');
+        btn.style.removeProperty('display');
+        if (btn.dataset.mgCourierOriginalHide === '1') {
+            btn.classList.add('hide');
+        } else {
+            btn.classList.remove('hide');
+        }
+    }
+
+    function setCourierButtonVisible(btn, visible) {
+        rememberCourierButtonState(btn);
+        if (visible) {
+            btn.classList.remove('mg-courier-filter-hide', 'hide');
+            btn.style.removeProperty('display');
+        } else {
+            btn.classList.add('mg-courier-filter-hide');
+            btn.style.display = 'none';
+        }
+    }
+
+    function applyCourierFilter() {
+        const container = document.getElementById('order_packages_courier_buttons');
+        if (!container) return;
+
+        ensureCourierFilterStyles();
+
+        const allowed = resolveAllowedCourierNames(getOrderSourceText());
+        const buttons = container.querySelectorAll('[id^="courier_"][data-courier-name]');
+        const toggleBtn = container.querySelector('button');
+
+        if (allowed === null) {
+            buttons.forEach((btn) => restoreCourierButtonState(btn));
+            if (toggleBtn) {
+                toggleBtn.classList.remove('mg-courier-filter-hide');
+                toggleBtn.style.removeProperty('display');
+            }
+            return;
+        }
+
+        const allowedSet = new Set(allowed);
+
+        buttons.forEach((btn) => {
+            const name = btn.getAttribute('data-courier-name');
+            setCourierButtonVisible(btn, allowedSet.has(name));
+        });
+
+        if (toggleBtn) {
+            const hideToggle = allowed.length === 0 || allowed.length < buttons.length;
+            if (hideToggle) {
+                toggleBtn.classList.add('mg-courier-filter-hide');
+                toggleBtn.style.display = 'none';
+            } else {
+                toggleBtn.classList.remove('mg-courier-filter-hide');
+                toggleBtn.style.removeProperty('display');
+            }
+        }
+    }
+
+    function scheduleCourierFilter() {
+        clearTimeout(courierFilterTimer);
+        courierFilterTimer = setTimeout(applyCourierFilter, 100);
+    }
+
     function bindSubmitGuards() {
         getSubmitButtons().forEach((button) => {
             if (button.dataset.mgCodGuard) return;
@@ -609,11 +756,14 @@
             document.getElementById('pnl_order_info'),
             document.getElementById('courier_fieldset_content'),
             document.getElementById('courier_package_form_container'),
+            document.getElementById('order_packages_courier_buttons'),
+            document.getElementById('oms_delivery_container'),
             document.body
         ].filter(Boolean);
 
         const observer = new MutationObserver(() => {
             bindSubmitGuards();
+            scheduleCourierFilter();
 
             const packageCount = getPackageCount();
             if (packageCount !== lastObservedPackageCount) {
@@ -636,6 +786,7 @@
             orderInfoCache.clear();
             lastObservedPackageCount = -1;
             resetOrderErrorState();
+            scheduleCourierFilter();
             if (!getApiToken()) {
                 showApiKeyModal();
             }
@@ -651,12 +802,14 @@
 
     function init() {
         showActiveBadge();
+        ensureCourierFilterStyles();
         if (!getApiToken()) {
             promptForApiToken();
         }
         bindSubmitGuards();
         observePage();
         lastObservedPackageCount = getPackageCount();
+        scheduleCourierFilter();
         scheduleValidation(false);
     }
 
