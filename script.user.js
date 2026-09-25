@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tampermonkey MG
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.2.1
+// @version      1.2.2
 // @description  Tampermonkey MG
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
@@ -605,7 +605,8 @@
         furgonetka: 'furgonetka',
         blpaczka: 'blpaczka',
         paczkomaty: 'paczkomaty',
-        inpostKurier: 'inpostkurier'
+        inpostKurier: 'inpostkurier',
+        erli: 'erlipro'
     };
 
     const TEMU_NK_COUNTRY_CODES = new Set(['RO', 'BG', 'HU']);
@@ -671,6 +672,7 @@
         if (source.includes('(Sklep int.)')) return [COURIER.furgonetka];
         if (source.includes('(Kaufland)')) return [COURIER.furgonetka];
         if (/Amazon/i.test(source)) return [COURIER.blpaczka];
+        if (/erli/i.test(source)) return [COURIER.erli];
 
         return null;
     }
