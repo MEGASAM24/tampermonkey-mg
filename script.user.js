@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tampermonkey MG
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.2.2
+// @version      1.2.3
 // @description  Tampermonkey MG
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
@@ -614,6 +614,10 @@
 
     let courierFilterTimer = null;
     let courierFilterActive = false;
+    let temuPlServiceAttempts = 0;
+    let temuPlServiceOrderId = null;
+
+    const TEMU_PL_INPOST_AFTER = { hour: 11, minute: 0 };
 
     function ensureCourierFilterStyles() {
         if (document.getElementById('mg-courier-filter-style')) return;
@@ -746,9 +750,70 @@
         }
     }
 
+    function isPolishTimeAtOrAfter(hour, minute) {
+        const parts = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Europe/Warsaw',
+            hour: '2-digit',
+            minute: '2-digit',
+            hourCycle: 'h23'
+        }).formatToParts(new Date());
+        const currentHour = Number(parts.find((part) => part.type === 'hour')?.value);
+        const currentMinute = Number(parts.find((part) => part.type === 'minute')?.value);
+        if (!Number.isFinite(currentHour) || !Number.isFinite(currentMinute)) return false;
+        return currentHour > hour || (currentHour === hour && currentMinute >= minute);
+    }
+
+    function isTemuPlSource(source) {
+        return /temu\s+pl\b/i.test(source) && /\(Temu\)|\{Temu\}/i.test(source);
+    }
+
+    function findTemuPlInpostOption(select) {
+        return [...select.options].find((option) => (
+            /inpost standard/i.test(option.value) ||
+            /INPOST \(PL\).*inpost standard/i.test(option.textContent)
+        )) || null;
+    }
+
+    function applyTemuPlInpostService() {
+        const orderId = getCurrentOrderId();
+        if (orderId !== temuPlServiceOrderId) {
+            temuPlServiceOrderId = orderId;
+            temuPlServiceAttempts = 0;
+        }
+
+        if (!isCourierFormOpen()) {
+            temuPlServiceAttempts = 0;
+            return;
+        }
+
+        const source = getOrderSourceText();
+        if (!isTemuPlSource(source)) return;
+        if (!isPolishTimeAtOrAfter(TEMU_PL_INPOST_AFTER.hour, TEMU_PL_INPOST_AFTER.minute)) return;
+
+        const select = document.querySelector('#courier_package_form select#service');
+        if (!select) return;
+
+        const option = findTemuPlInpostOption(select);
+        if (!option || select.value === option.value) return;
+
+        const isDefault = !select.value || select.value === 'use-cheapest';
+        if (!isDefault || temuPlServiceAttempts >= 2) return;
+
+        temuPlServiceAttempts += 1;
+        select.value = option.value;
+        if (window.jQuery) {
+            window.jQuery(select).val(option.value).trigger('change');
+        } else {
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
     function scheduleCourierFilter() {
         clearTimeout(courierFilterTimer);
-        courierFilterTimer = setTimeout(applyCourierFilter, 100);
+        courierFilterTimer = setTimeout(() => {
+            applyCourierFilter();
+            applyTemuPlInpostService();
+        }, 100);
     }
 
     function bindSubmitGuards() {
@@ -795,6 +860,8 @@
             lastObservedPackageCount = -1;
             resetOrderErrorState();
             courierFilterActive = false;
+            temuPlServiceAttempts = 0;
+            temuPlServiceOrderId = null;
             scheduleCourierFilter();
             if (!getApiToken()) {
                 showApiKeyModal();
