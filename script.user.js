@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tampermonkey MG
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.2.3
+// @version      1.2.5
 // @description  Tampermonkey MG
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
@@ -676,7 +676,9 @@
         if (source.includes('(Sklep int.)')) return [COURIER.furgonetka];
         if (source.includes('(Kaufland)')) return [COURIER.furgonetka];
         if (/Amazon/i.test(source)) return [COURIER.blpaczka];
+        if (/\(eBay\)/i.test(source)) return [COURIER.blpaczka];
         if (/erli/i.test(source)) return [COURIER.erli];
+        if (/\(Trendyol\)/i.test(source)) return [];
 
         return null;
     }
