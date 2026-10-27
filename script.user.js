@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tampermonkey MG
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.2.5
+// @version      1.2.6
 // @description  Tampermonkey MG
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
@@ -616,6 +616,8 @@
     let courierFilterActive = false;
     let temuPlServiceAttempts = 0;
     let temuPlServiceOrderId = null;
+    let packagesModeAttempts = 0;
+    let packagesModeOrderId = null;
 
     const TEMU_PL_INPOST_AFTER = { hour: 11, minute: 0 };
 
@@ -810,11 +812,74 @@
         }
     }
 
+    function isSubpackagesOption(option) {
+        return option.value === 'subpackages' || /podpaczk/i.test(option.textContent);
+    }
+
+    function findPackageKindSelects() {
+        const root = document.getElementById('courier_package_form')
+            || document.getElementById('courier_package_form_container');
+        if (!root) return [];
+
+        const selects = [];
+        root.querySelectorAll('label').forEach((label) => {
+            if (!/rodzaj przesyłek/i.test(label.textContent)) return;
+            const select = label.htmlFor
+                ? document.getElementById(label.htmlFor)
+                : label.parentElement?.querySelector('select');
+            if (select && select.tagName === 'SELECT' && !selects.includes(select)) {
+                selects.push(select);
+            }
+        });
+        return selects;
+    }
+
+    function setSelectValue(select, value) {
+        select.value = value;
+        if (window.jQuery) {
+            window.jQuery(select).val(value).trigger('change');
+        } else {
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    function applySeparatePackagesMode() {
+        const orderId = getCurrentOrderId();
+        if (orderId !== packagesModeOrderId) {
+            packagesModeOrderId = orderId;
+            packagesModeAttempts = 0;
+        }
+
+        if (!isCourierFormOpen()) {
+            packagesModeAttempts = 0;
+            return;
+        }
+
+        findPackageKindSelects().forEach((select) => {
+            const subOption = [...select.options].find(isSubpackagesOption);
+            if (!subOption) return;
+
+            const nextOption = subOption.nextElementSibling;
+            const shouldSwitch = select.value === subOption.value
+                && nextOption instanceof HTMLOptionElement;
+
+            subOption.hidden = true;
+            subOption.disabled = true;
+            subOption.remove();
+
+            if (!shouldSwitch || packagesModeAttempts >= 2) return;
+
+            packagesModeAttempts += 1;
+            setSelectValue(select, nextOption.value);
+        });
+    }
+
     function scheduleCourierFilter() {
         clearTimeout(courierFilterTimer);
         courierFilterTimer = setTimeout(() => {
             applyCourierFilter();
             applyTemuPlInpostService();
+            applySeparatePackagesMode();
         }, 100);
     }
 
@@ -864,6 +929,8 @@
             courierFilterActive = false;
             temuPlServiceAttempts = 0;
             temuPlServiceOrderId = null;
+            packagesModeAttempts = 0;
+            packagesModeOrderId = null;
             scheduleCourierFilter();
             if (!getApiToken()) {
                 showApiKeyModal();
