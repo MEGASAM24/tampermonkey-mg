@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tampermonkey MG
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.2.6
+// @version      1.2.7
 // @description  Tampermonkey MG
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
@@ -602,7 +602,6 @@
         allegro: 'allegrokurier',
         temu: 'temu_shipping',
         noweKolory: 'nowekolory',
-        furgonetka: 'furgonetka',
         blpaczka: 'blpaczka',
         paczkomaty: 'paczkomaty',
         inpostKurier: 'inpostkurier',
@@ -675,8 +674,8 @@
         }
 
         if (source.includes('(Allegro)')) return [COURIER.allegro];
-        if (source.includes('(Sklep int.)')) return [COURIER.furgonetka];
-        if (source.includes('(Kaufland)')) return [COURIER.furgonetka];
+        if (source.includes('(Sklep int.)')) return [COURIER.blpaczka];
+        if (source.includes('(Kaufland)')) return [COURIER.blpaczka];
         if (/Amazon/i.test(source)) return [COURIER.blpaczka];
         if (/\(eBay\)/i.test(source)) return [COURIER.blpaczka];
         if (/erli/i.test(source)) return [COURIER.erli];
