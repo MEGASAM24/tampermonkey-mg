@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tampermonkey MG
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.2.7
+// @version      1.2.9
 // @description  Tampermonkey MG
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
@@ -602,9 +602,11 @@
         allegro: 'allegrokurier',
         temu: 'temu_shipping',
         noweKolory: 'nowekolory',
+        furgonetka: 'furgonetka',
         blpaczka: 'blpaczka',
         paczkomaty: 'paczkomaty',
         inpostKurier: 'inpostkurier',
+        inpostInternational: 'inpostinternational',
         erli: 'erlipro'
     };
 
@@ -654,6 +656,14 @@
         return document.getElementById('oms_info_delivery_method')?.textContent?.trim() || '';
     }
 
+    function resolveSklepIntCourier() {
+        const delivery = getDeliveryMethodText();
+        if (/mondial|inpost\s+international/i.test(delivery)) return COURIER.inpostInternational;
+        if (/dpd/i.test(delivery)) return COURIER.blpaczka;
+        if (/inpost/i.test(delivery)) return COURIER.furgonetka;
+        return COURIER.blpaczka;
+    }
+
     function resolveAllowedCourierNames(source) {
         if (!source) return null;
 
@@ -674,7 +684,7 @@
         }
 
         if (source.includes('(Allegro)')) return [COURIER.allegro];
-        if (source.includes('(Sklep int.)')) return [COURIER.blpaczka];
+        if (source.includes('(Sklep int.)')) return [resolveSklepIntCourier()];
         if (source.includes('(Kaufland)')) return [COURIER.blpaczka];
         if (/Amazon/i.test(source)) return [COURIER.blpaczka];
         if (/\(eBay\)/i.test(source)) return [COURIER.blpaczka];
