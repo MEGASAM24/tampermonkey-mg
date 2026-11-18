@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tampermonkey MG
 // @namespace    https://github.com/MEGASAM24/tampermonkey-mg
-// @version      1.2.9
+// @version      1.2.10
 // @description  Tampermonkey MG
 // @match        *://panel-g.baselinker.com/*
 // @match        *://panel.baselinker.com/*
@@ -234,6 +234,17 @@
 
         const paymentMethod = panel.querySelector('#oms_info_payment_method');
         return paymentMethod && /pobranie/i.test(paymentMethod.textContent);
+    }
+
+    const PAID_ORDER_COD_FILLED_MESSAGE =
+        'Zamówienie opłacone ma wypełnioną wartość kwoty pobrania. Sprawdź pole Pobranie.';
+
+    function isOrderWithoutCod() {
+        const panel = document.getElementById('pnl_order_info');
+        if (!panel) return false;
+
+        const flag = panel.querySelector('[onclick*="payment_method_cod"]');
+        return flag ? /^nie$/i.test(flag.textContent.trim()) : false;
     }
 
     function getPackageCount() {
@@ -492,6 +503,15 @@
                 return;
             }
 
+            if (isOrderWithoutCod()) {
+                if (getPendingFormCod() > EPSILON) {
+                    showOrderCodError(orderId, PAID_ORDER_COD_FILLED_MESSAGE);
+                    return;
+                }
+                clearCodError();
+                return;
+            }
+
             if (!getApiToken()) {
                 promptForApiToken();
                 if (!getApiToken()) return;
@@ -547,9 +567,19 @@
     }
 
     async function onSubmitAttempt(event) {
-        if (!isCodOrder()) return;
-
         const orderId = getCurrentOrderId();
+        const pendingCod = getPendingFormCod();
+
+        if (isOrderWithoutCod() && pendingCod > EPSILON) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            if (orderId) showOrderCodError(orderId, PAID_ORDER_COD_FILLED_MESSAGE);
+            else showBanner(PAID_ORDER_COD_FILLED_MESSAGE, 'error');
+            return;
+        }
+
+        if (!isCodOrder()) return;
         if (!orderId) return;
 
         event.preventDefault();
@@ -557,7 +587,6 @@
         event.stopImmediatePropagation();
 
         const button = event.currentTarget;
-        const pendingCod = getPendingFormCod();
 
         let orderInfo;
         let existingCods = [];
